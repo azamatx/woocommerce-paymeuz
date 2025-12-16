@@ -176,21 +176,6 @@ function woocommerce_payme() {
                     continue;
                 }
 
-                $billz_fields = $product->get_meta( '_billz_custom_fields', true );
-
-                $package_code = '0';
-                $code         = (string) $product->get_id();
-
-                if ( is_array( $billz_fields ) && ! empty( $billz_fields[ 0 ] ) ) {
-                    if ( ! empty( $billz_fields[ 0 ][ 'kodupakovki' ] ) ) {
-                        $package_code = (string) $billz_fields[ 0 ][ 'kodupakovki' ];
-                    }
-
-                    if ( ! empty( $billz_fields[ 0 ][ 'ikpu' ] ) ) {
-                        $code = (string) $billz_fields[ 0 ][ 'ikpu' ];
-                    }
-                }
-
                 $qty = (float) $item->get_quantity();
 
                 if ( $qty <= 0 ) {
@@ -205,9 +190,8 @@ function woocommerce_payme() {
                     'title'        => $item->get_name(),
                     'price'        => $unit_price_tiyin,
                     'count'        => $qty,
-                    'code'         => $code,
+                    'code'         => $product->get_id(),
                     'vat_percent'  => 0,
-                    'package_code' => $package_code,
                     );
             }
 
@@ -330,91 +314,9 @@ function woocommerce_payme() {
             try {
                 $account = $payload[ 'params' ][ 'account' ] ?? array(  );
 
+                // The order_id can be configured as the primary required parameter in the Payme Merchant Cabinet under Cashboxes → Settings → Payment Details.
                 if ( isset( $account[ 'order_id' ] ) && '' !== $account[ 'order_id' ] ) {
                     return new WC_Order( $account[ 'order_id' ] );
-                }
-
-                if ( isset( $account[ 'order' ] ) && '' !== $account[ 'order' ] ) {
-                    $order_raw = (string) $account[ 'order' ];
-                    preg_match_all( '/\d+/', $order_raw, $matches );
-
-                    if ( ! empty( $matches[ 0 ] ) ) {
-                        $order_id = (int) end( $matches[ 0 ] );
-
-                        if ( $order_id > 0 ) {
-                            return new WC_Order( $order_id );
-                        }
-                    }
-
-                    $this->respond( $this->error_order_id( $payload ) );
-                }
-
-                if ( isset( $account[ 'phone' ] ) && '' !== $account[ 'phone' ] ) {
-                    $normalize_phone = static function ( $value ) {
-                        return preg_replace( '/\D+/', '', (string) $value );
-                    };
-
-                    $incoming_phone = $normalize_phone( $account[ 'phone' ] );
-
-                    if ( '' === $incoming_phone ) {
-                        $this->respond( $this->error_order_id( $payload ) );
-                    }
-
-                    $last7 = substr( $incoming_phone, -7 );
-
-                    $candidates = wc_get_orders( array(
-                        'limit'      => 50,
-                        'orderby'    => 'date',
-                        'order'      => 'DESC',
-                        'status'     => array( 'pending', 'processing', 'completed', 'cancelled', 'refunded', 'failed' ),
-                        'meta_query' => array(
-                            array(
-                                'key'     => '_billing_phone',
-                                'value'   => $last7,
-                                'compare' => 'LIKE',
-                                ),
-                            ),
-                        ) );
-
-                    $matched_pending = null;
-                    $matched_latest  = null;
-
-                    foreach ( $candidates as $order ) {
-                        if ( ! ( $order instanceof WC_Order ) ) {
-                            continue;
-                        }
-
-                        $order_phone = $normalize_phone( $order->get_billing_phone() );
-
-                        if ( '' === $order_phone ) {
-                            continue;
-                        }
-
-                        $is_match = ( $order_phone === $incoming_phone )
-                            || ( strlen( $order_phone ) >= 7 && str_ends_with( $order_phone, $incoming_phone ) )
-                            || ( strlen( $incoming_phone ) >= 7 && str_ends_with( $incoming_phone, $order_phone ) );
-
-                        if ( ! $is_match ) {
-                            continue;
-                        }
-
-                        if ( is_null( $matched_latest ) ) {
-                            $matched_latest = $order;
-                        }
-
-                        if ( $order->get_status() === 'pending' ) {
-                            $matched_pending = $order;
-                            break;
-                        }
-                    }
-
-                    $found = $matched_pending ?: $matched_latest;
-
-                    if ( $found instanceof WC_Order ) {
-                        return $found;
-                    }
-
-                    $this->respond( $this->error_order_id( $payload ) );
                 }
 
                 $this->respond( $this->error_order_id( $payload ) );
@@ -767,7 +669,6 @@ function woocommerce_payme() {
                     'amount'       => (int) $this->amount_to_coin( $order->get_total() ),
                     'account'      => array(
                         'order_id' => (string) $order->get_id(),
-                        'phone'    => (string) $order->get_billing_phone(),
                         ),
                     'create_time'  => $create_time,
                     'perform_time' => (int) ( is_null( $this->get_perform_time( $order ) ) ? 0 : $this->get_perform_time( $order ) ),
