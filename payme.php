@@ -209,7 +209,7 @@ function woocommerce_payme() {
             $form .= '<input type="hidden" name="description[' . esc_attr( $lang ) . ']" value="' . esc_attr( $description_value ) . '">';
             $form .= $detail_field;
             $form .= '<input type="submit" class="button alt" id="submit_payme_form" value="' . esc_attr( $label_pay ) . '">';
-            $form .= '<a class="button cancel" href="' . esc_url( $order->get_cancel_order_url() ) . '">' . esc_html( $label_cancel ) . '</a>';
+            $form .= '<a class="button cancel" style="margin-left: 15px;" href="' . esc_url( $order->get_cancel_order_url() ) . '">' . esc_html( $label_cancel ) . '</a>';
             $form .= '</form>';
 
             return $form;
